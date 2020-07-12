@@ -1,4 +1,6 @@
 *.savegame
+*.savegame.json
+*.savegame-mod
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

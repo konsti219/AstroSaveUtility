@@ -2,19 +2,19 @@
 # save file that Astroneer uses.
 
 # .savegame         unmodded savefile
-# .savegame-raw     decompressed savefile
-# .savegame-rawmod  modified savefile
-# .savegame-z       recompressed savefile for itegrity check
+# .savegame.json    decompressed savefile
 # .savegame-mod     loadable modded savefile
 
 # usage
 # copy your savefile into the folder where this script is located and rename it for ease of use (e.g. test.savegame)
 # 
-# $ python saveutil.py test.savegame save
+# $ python saveutil.py test load
 
-import zlib
 import sys
-import binascii
+import base64
+import json
+
+import cogs.Compression as Compression
 
 print()
 filename = sys.argv[1]
@@ -22,64 +22,37 @@ filename = sys.argv[1]
 if sys.argv[2] == "load":
     print("decompressing...")
 
-    with open(filename, 'rb') as compressed:
-        header = compressed.read(16)
-        #print("Header: " + binascii.hexlify(header))
-        data_compressed = compressed.read()
+    save = {
+        "data": ""
+    }
 
-        # decompress
-        data_decompressed = zlib.decompress(data_compressed)
-        sz_in  = len(data_compressed)
-        sz_out = len(data_decompressed)
+    with open(filename + '.savegame', 'rb') as compressedFile:
 
-        #write
-        with open(filename + '-raw', 'wb') as inflated:
-            inflated.write(data_decompressed)
+        decompressed = Compression.decompress(compressedFile.read())
+        b64encoded = base64.b64encode(decompressed).decode("utf-8")
+        save["data"] = b64encoded
         
-        print("Decompressed from {:d} (0x{:0x}) to {:d} (0x{:0x}) bytes".format(sz_in, sz_in, sz_out, sz_out))
+        with open(filename + '.savegame.json', 'wb') as decompressedFile:
+
+            x = json.dumps(save)
+            decompressedFile.write(bytes(x, "utf-8"))
+                
 
 elif sys.argv[2] == "save":
     print("compressing...")
 
     # load modded file
-    with open(filename + '-rawmod', 'rb') as decompressed:
-        data_compressed = bytearray()
-        compress = zlib.compressobj(
-            6, # Compression level
-            zlib.DEFLATED, # default
-            (4+8), # Window size
-            zlib.DEF_MEM_LEVEL, # default
-            0 # Z_DEFAULT_STRATEGY
-        )
-        #compress = zlib.compressobj()
+    with open(filename + '.savegame.json', 'rb') as decompressedFile:
 
-        # compress
-        data_decompressed = decompressed.read()
-
-        data_compressed += compress.compress(data_decompressed)
-        data_compressed += compress.flush()
-
-        sz_in  = len(data_decompressed)
-        sz_out = len(data_compressed)
-        print("Compressed from {:d} (0x{:0x}) to {:d} (0x{:0x}) bytes".format(sz_in,sz_in,sz_out,sz_out))
+        save = json.loads(decompressedFile.read())
 
         # save
-        
-        with open(filename + '-mod', 'wb') as modded:
-
-            # generate header
+        with open(filename + '.savegame-mod', 'wb') as compressedFile:
             
-            header = binascii.unhexlify("BE40374AEE0B74A301000000")
-            
-            # format size as hex, then turn to binary string and reverse (dunno why reverse)
-            size = binascii.unhexlify('{:08x}'.format(sz_in))[::-1]
-            header += size
-
-            print("Header: " + binascii.hexlify(header))
+            compressed = Compression.compress(base64.b64decode(save["data"]))
 
             # write
-            modded.write(header)
-            modded.write(data_compressed)
+            compressedFile.write(compressed)
             #sz_in  = len(data_decompressed1)
             #sz_out = len(data_compressed2)
             #print("Deflated from {:d} (0x{:0x}) to {:d} (0x{:0x}) bytes".format(sz_in,sz_in,sz_out,sz_out))
